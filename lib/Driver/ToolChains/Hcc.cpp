@@ -118,6 +118,13 @@ void HCC::CXXAMPAssemble::ConstructJob(Compilation &C, const JobAction &JA,
   assert(Inputs.size() == 1 && "Unable to handle multiple inputs.");
 
   ArgStringList CmdArgs;
+
+  #ifdef _WIN32
+    CmdArgs.push_back(Args.MakeArgString(getToolChain().GetProgramPath("clamp-assemble.py")));
+  #else
+    CmdArgs.push_back("clamp-assemble");
+  #endif
+
   for (InputInfoList::const_iterator
          it = Inputs.begin(), ie = Inputs.end(); it != ie; ++it) {
     const InputInfo &II = *it;
@@ -132,7 +139,8 @@ void HCC::CXXAMPAssemble::ConstructJob(Compilation &C, const JobAction &JA,
   else
     Output.getInputArg().renderAsInput(Args, CmdArgs);
 
-  const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("clamp-assemble"));
+  // const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("clamp-assemble"));
+  const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("python"));
 
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 }
