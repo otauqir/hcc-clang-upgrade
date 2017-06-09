@@ -204,7 +204,7 @@ public:
   llvm::Type *ConvertTypeForMem(QualType T);
 
   /// Get the LLVM pointer type of a variable.
-  llvm::PointerType *getVariableType(VarDecl D);
+  //llvm::PointerType *getVariableType(VarDecl D);
 
   /// GetFunctionType - Get the LLVM function type for \arg Info.
   llvm::FunctionType *GetFunctionType(const CGFunctionInfo &Info);
