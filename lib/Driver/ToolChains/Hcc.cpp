@@ -17,6 +17,8 @@
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/Path.h"
 #include <system_error>
+#include <iostream>
+#include <process.h>
 
 using namespace clang::driver;
 using namespace clang::driver::toolchains;
@@ -60,13 +62,11 @@ void HCC::HCKernelAssemble::ConstructJob(Compilation &C, const JobAction &JA,
   assert(Inputs.size() == 1 && "Unable to handle multiple inputs.");
 
   ArgStringList CmdArgs;
-
   #ifdef _WIN32
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetProgramPath("hc-kernel-assemble.py")));
   #else
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetProgramPath("hc-kernel-assemble")));
   #endif
-
   for (InputInfoList::const_iterator
          it = Inputs.begin(), ie = Inputs.end(); it != ie; ++it) {
     const InputInfo &II = *it;
@@ -82,9 +82,8 @@ void HCC::HCKernelAssemble::ConstructJob(Compilation &C, const JobAction &JA,
     Output.getInputArg().renderAsInput(Args, CmdArgs);
 
   // locate where the command is
-  //const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("hc-kernel-assemble"));
   const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("python"));
-
+  //std::cout << "hc-kernel-assemble process id: " << _getpid() << std::endl;
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 }
 
@@ -96,13 +95,11 @@ void HCC::HCHostAssemble::ConstructJob(Compilation &C, const JobAction &JA,
   assert(Inputs.size() == 1 && "Unable to handle multiple inputs.");
 
   ArgStringList CmdArgs;
-
   #ifdef _WIN32
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetProgramPath("hc-host-assemble.py")));
   #else
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetProgramPath("hc-host-assemble")));
   #endif
-
   for (InputInfoList::const_iterator
          it = Inputs.begin(), ie = Inputs.end(); it != ie; ++it) {
     const InputInfo &II = *it;
@@ -120,9 +117,8 @@ void HCC::HCHostAssemble::ConstructJob(Compilation &C, const JobAction &JA,
   // decide which options gets passed through
   HCPassOptions(Args, CmdArgs);
 
-  //const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("hc-host-assemble"));
   const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("python"));
-
+  //std::cout << "hc-host-assemble process id: " << _getpid() << std::endl;
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 }
 
@@ -134,13 +130,11 @@ void HCC::CXXAMPAssemble::ConstructJob(Compilation &C, const JobAction &JA,
   assert(Inputs.size() == 1 && "Unable to handle multiple inputs.");
 
   ArgStringList CmdArgs;
-
   #ifdef _WIN32
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetProgramPath("clamp-assemble.py")));
   #else
     CmdArgs.push_back(Args.MakeArgString(getToolChain().GetProgramPath("clamp-assemble")));
   #endif
-
   for (InputInfoList::const_iterator
          it = Inputs.begin(), ie = Inputs.end(); it != ie; ++it) {
     const InputInfo &II = *it;
@@ -155,9 +149,8 @@ void HCC::CXXAMPAssemble::ConstructJob(Compilation &C, const JobAction &JA,
   else
     Output.getInputArg().renderAsInput(Args, CmdArgs);
 
-  // const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("clamp-assemble"));
   const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("python"));
-
+  //std::cout << "clamp-assemble process id: " << _getpid() << std::endl;
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 }
 
@@ -181,6 +174,12 @@ void HCC::CXXAMPLink::ConstructJob(Compilation &C,
                                    const ArgList &Args,
                                    const char *LinkingOutput) const {
   ArgStringList CmdArgs;
+ //std::cout << "CXXAMPLink::ConstructJob" << std::endl;
+  #ifdef _WIN32
+    CmdArgs.push_back(Args.MakeArgString(getToolChain().GetProgramPath("clamp-link.py")));
+  #else
+    CmdArgs.push_back(Args.MakeArgString(getToolChain().GetProgramPath("clamp-link")));
+  #endif
 
   // add verbose flag to linker script if clang++ is invoked with --verbose flag
   if (Args.hasArg(options::OPT_v))
@@ -228,18 +227,8 @@ void HCC::CXXAMPLink::ConstructJob(Compilation &C,
   // pass inputs to gnu ld for initial processing
   Linker::ConstructLinkerJob(C, JA, Output, Inputs, Args, LinkingOutput, CmdArgs);
 
-  /*auto ClampArgs = CmdArgs;
-  if (Args.hasArg(options::OPT_hcc_extra_libs_EQ)) {
-    auto HccExtraLibs = Args.getAllArgValues(options::OPT_hcc_extra_libs_EQ);
-    std::string prefix{"--hcc-extra-libs="};
-    for(auto&& Lib:HccExtraLibs) {
-      ClampArgs.push_back(Args.MakeArgString(prefix + Lib));
-    }
-  }*/
-
-  const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("clamp-link"));
-
-  //C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, ClampArgs, Inputs));
+  const char *Exec = Args.MakeArgString(getToolChain().GetProgramPath("python"));
+  //std::cout << "clamp-link process id: " << _getpid() << std::endl;
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 }
 
@@ -248,7 +237,7 @@ void HCC::CXXAMPLink::ConstructJob(Compilation &C,
 /// - C++AMP mode:
 ///   - use clamp-assemble as assembler
 ///   - use clamp-link as linker
-/// - HC mode:
+/// - HC mode:  
 ///   - use hc-kernel-assemble as assembler for kernel path
 ///   - use hc-host-assemble as assembler for host path
 ///   - use clamp-link as linker

@@ -6,6 +6,12 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+#ifdef NDEBUG
+  #undef NDEBUG
+#endif
+#include <iostream>
+#include <process.h>
+#include <string.h>
 
 #include "clang/Driver/Driver.h"
 #include "InputInfo.h"
@@ -76,6 +82,7 @@
 #include <unistd.h> // getpid
 #endif
 
+static int abc = 0;
 using namespace clang::driver;
 using namespace clang;
 using namespace llvm::opt;
@@ -92,7 +99,7 @@ Driver::Driver(StringRef ClangExecutable, StringRef DefaultTargetTriple,
       CCCPrintBindings(false), CCPrintHeaders(false), CCLogDiagnostics(false),
       CCGenDiagnostics(false), DefaultTargetTriple(DefaultTargetTriple),
       CCCGenericGCCName(""), CheckInputsExist(true), CCCUsePCH(true),
-      GenReproducer(false), SuppressMissingInputWarning(false) {
+      SuppressMissingInputWarning(false) {
 
   // Provide a sane fallback if no VFS is specified.
   if (!this->VFS)
@@ -656,9 +663,6 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
     CCCGenericGCCName = A->getValue();
   CCCUsePCH =
       Args.hasFlag(options::OPT_ccc_pch_is_pch, options::OPT_ccc_pch_is_pth);
-  GenReproducer = Args.hasFlag(options::OPT_gen_reproducer,
-                               options::OPT_fno_crash_diagnostics,
-                               !!::getenv("FORCE_CLANG_DIAGNOSTICS_CRASH"));
   // FIXME: DefaultTargetTriple is used by the target-prefixed calls to as/ld
   // and getToolChain is const.
   if (IsCLMode()) {
@@ -1209,7 +1213,7 @@ bool Driver::HandleImmediateArgs(const Compilation &C) {
     TC.printVerboseInfo(llvm::errs());
 
   if (C.getArgs().hasArg(options::OPT_print_resource_dir)) {
-    llvm::outs() << ResourceDir << '\n';
+    llvm::outs() << ResourceDir;
     return false;
   }
 
@@ -2869,7 +2873,8 @@ void Driver::BuildJobs(Compilation &C) const {
     JobAction *JA = dyn_cast<JobAction>(A);
     // UPGRADE_TBD: FIXME This is hack. Need to find a cleaner way
     // The line is added so clang -emit-llvm would pick correct toolchain for HCC inputs
-    if (JA && IsCXXAMPBackendJobAction(JA)) {
+    if (JA && IsCXXAMPBackendJobAction(JA)) {// || (!strcmp(A->getClassName(A->getKind()), "linker"))) {
+      //std::cout << "IsCXXAMPBackendJobAction " << A->getClassName(A->getKind()) << std::endl;
       BuildJobsForAction(C, A, C.getSingleOffloadToolChain<Action::OFK_HCC>(),
                        /*BoundArch*/ StringRef(),
                        /*AtTopLevel*/ true,
@@ -2877,6 +2882,7 @@ void Driver::BuildJobs(Compilation &C) const {
                        /*LinkingOutput*/ LinkingOutput, CachedResults,
                        /*TargetDeviceOffloadKind*/ Action::OFK_None);
     } else {
+      //std::cout << "not IsCXXAMPBackendJobAction " << A->getClassName(A->getKind()) << std::endl;
       BuildJobsForAction(C, A, &C.getDefaultToolChain(),
                        /*BoundArch*/ StringRef(),
                        /*AtTopLevel*/ true,
@@ -3345,6 +3351,11 @@ InputInfo Driver::BuildJobsForAction(
     bool AtTopLevel, bool MultipleArchs, const char *LinkingOutput,
     std::map<std::pair<const Action *, std::string>, InputInfo> &CachedResults,
     Action::OffloadKind TargetDeviceOffloadKind) const {
+  // std::cout << "=====================" << "BuildJobsForAction " << A->getClassName(A->getKind()) << std::endl;
+  // if (TC->getTool(A->getKind()) != nullptr)
+  //   std::cout << TC->getTool(A->getKind())->getName() << std::endl;
+  // else
+  //   std::cout << "no tool" << std::endl;
   std::pair<const Action *, std::string> ActionTC = {
       A, GetTriplePlusArchString(TC, BoundArch, TargetDeviceOffloadKind)};
   auto CachedResult = CachedResults.find(ActionTC);
@@ -3364,7 +3375,7 @@ InputInfo Driver::BuildJobsForActionNoCache(
     std::map<std::pair<const Action *, std::string>, InputInfo> &CachedResults,
     Action::OffloadKind TargetDeviceOffloadKind) const {
   llvm::PrettyStackTraceString CrashInfo("Building compilation jobs");
-
+  //std::cout << "=====================" << "BuildJobsForActionNoCache " << A->getClassName(A->getKind()) << std::endl;
   InputInfoList OffloadDependencesInputInfo;
   bool BuildingForOffloadDevice = TargetDeviceOffloadKind != Action::OFK_None;
   if (const OffloadAction *OA = dyn_cast<OffloadAction>(A)) {
@@ -3439,12 +3450,17 @@ InputInfo Driver::BuildJobsForActionNoCache(
     StringRef ArchName = BAA->getArchName();
 
     if (!ArchName.empty())
+    {
+      //std::cout << "getToolChain" << std::endl;
       TC = &getToolChain(C.getArgs(),
                          computeTargetTriple(*this, DefaultTargetTriple,
                                              C.getArgs(), ArchName));
+    }
     else
+    {
+      //std::cout << "getDefaultToolChain" << std::endl;
       TC = &C.getDefaultToolChain();
-
+    }
     return BuildJobsForAction(C, *BAA->input_begin(), TC, ArchName, AtTopLevel,
                               MultipleArchs, LinkingOutput, CachedResults,
                               TargetDeviceOffloadKind);
@@ -3999,6 +4015,8 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
     case llvm::Triple::AMDHSA:
       if (Target.getEnvironment() == llvm::Triple::HCC) {
         TC = llvm::make_unique<toolchains::HCCToolChain>(*this, Target, Args);
+        //std::cout << "=========================HCC============================" << std::endl;
+        //std::cout << "process id: " << _getpid() << std::endl;
       } else {
         TC = llvm::make_unique<toolchains::AMDGPUToolChain>(*this, Target, Args);
       }
@@ -4022,6 +4040,8 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
         break;
       case llvm::Triple::MSVC:
       case llvm::Triple::UnknownEnvironment:
+        //std::cout << "======================MSVC==============================" << std::endl;
+        //std::cout << "process id: " << _getpid() << std::endl;
         TC = llvm::make_unique<toolchains::MSVCToolChain>(*this, Target, Args);
         break;
       }

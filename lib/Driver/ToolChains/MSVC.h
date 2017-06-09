@@ -10,6 +10,7 @@
 #ifndef LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MSVC_H
 #define LLVM_CLANG_LIB_DRIVER_TOOLCHAINS_MSVC_H
 
+#include "Gnu.h"
 #include "Cuda.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Tool.h"

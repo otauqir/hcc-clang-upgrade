@@ -6,6 +6,7 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+#include <iostream>
 
 #include "Gnu.h"
 #include "Linux.h"
@@ -412,7 +413,7 @@ void tools::gnutools::Linker::ConstructLinkerJob(Compilation &C,
   const toolchains::Linux &ToolChain =
       static_cast<const toolchains::Linux &>(getToolChain());
   const Driver &D = ToolChain.getDriver();
-
+  //std::cout << "line 416" << std::endl;
   const llvm::Triple &Triple = getToolChain().getEffectiveTriple();
 
   const llvm::Triple::ArchType Arch = ToolChain.getArch();
@@ -424,7 +425,7 @@ void tools::gnutools::Linker::ConstructLinkerJob(Compilation &C,
   const bool HasCRTBeginEndFiles =
       ToolChain.getTriple().hasEnvironment() ||
       (ToolChain.getTriple().getVendor() != llvm::Triple::MipsTechnologies);
-
+  //std::cout << "line 428" << std::endl;
   // Silence warning for "clang -g foo.o -o foo"
   Args.ClaimAllArgs(options::OPT_g_Group);
   // and "clang -emit-llvm foo.o -o foo"
@@ -432,7 +433,7 @@ void tools::gnutools::Linker::ConstructLinkerJob(Compilation &C,
   // and for "clang -w foo.o -o foo". Other warning options are already
   // handled somewhere else.
   Args.ClaimAllArgs(options::OPT_w);
-
+  //std::cout << "line 436" << std::endl;
   const char *Exec = Args.MakeArgString(ToolChain.GetLinkerPath());
   if (llvm::sys::path::stem(Exec) == "lld") {
     CmdArgs.push_back("-flavor");
@@ -449,7 +450,7 @@ void tools::gnutools::Linker::ConstructLinkerJob(Compilation &C,
 
   if (Args.hasArg(options::OPT_rdynamic))
     CmdArgs.push_back("-export-dynamic");
-
+    //std::cout << "line 453" << std::endl;
   if (Args.hasArg(options::OPT_s))
     CmdArgs.push_back("-s");
 
@@ -463,21 +464,25 @@ void tools::gnutools::Linker::ConstructLinkerJob(Compilation &C,
     if (CPU.empty() || CPU == "generic" || CPU == "cortex-a53")
       CmdArgs.push_back("--fix-cortex-a53-843419");
   }
-
-  for (const auto &Opt : ToolChain.ExtraOpts)
-    CmdArgs.push_back(Opt.c_str());
-
+  //std::cout << "line 467" << std::endl;
+  //std::cout << "c_str(): " << ToolChain.ExtraOpts[0].c_str() << std::endl;
+  //for (const auto &Opt : ToolChain.ExtraOpts)
+  //{
+  //  std::cout << "c_str(): " << Opt.c_str() << std::endl;
+  //  CmdArgs.push_back(Opt.c_str());
+  //}
+  //std::cout << "line 470" << std::endl;
   if (!Args.hasArg(options::OPT_static)) {
     CmdArgs.push_back("--eh-frame-hdr");
   }
-
-  if (const char *LDMOption = getLDMOption(ToolChain.getTriple(), Args)) {
-    CmdArgs.push_back("-m");
-    CmdArgs.push_back(LDMOption);
-  } else {
-    D.Diag(diag::err_target_unknown_triple) << Triple.str();
-    return;
-  }
+  //std::cout << "line 474" << std::endl;
+  // if (const char *LDMOption = getLDMOption(ToolChain.getTriple(), Args)) {
+  //   CmdArgs.push_back("-m");
+  //   CmdArgs.push_back(LDMOption);
+  // } else {
+  //   D.Diag(diag::err_target_unknown_triple) << Triple.str();
+  //   return;
+  // }
 
   if (Args.hasArg(options::OPT_static)) {
     if (Arch == llvm::Triple::arm || Arch == llvm::Triple::armeb ||
@@ -489,18 +494,18 @@ void tools::gnutools::Linker::ConstructLinkerJob(Compilation &C,
     CmdArgs.push_back("-shared");
   }
 
-  if (!Args.hasArg(options::OPT_static)) {
-    if (Args.hasArg(options::OPT_rdynamic))
-      CmdArgs.push_back("-export-dynamic");
+  // if (!Args.hasArg(options::OPT_static)) {
+  //   if (Args.hasArg(options::OPT_rdynamic))
+  //     CmdArgs.push_back("-export-dynamic");
 
-    if (!Args.hasArg(options::OPT_shared)) {
-      const std::string Loader =
-          D.DyldPrefix + ToolChain.getDynamicLinker(Args);
-      CmdArgs.push_back("-dynamic-linker");
-      CmdArgs.push_back(Args.MakeArgString(Loader));
-    }
-  }
-
+  //    if (!Args.hasArg(options::OPT_shared)) {
+  //      const std::string Loader =
+  //          D.DyldPrefix + ToolChain.getDynamicLinker(Args);
+  //      CmdArgs.push_back("-dynamic-linker");
+  //      CmdArgs.push_back(Args.MakeArgString(Loader));
+  //    }
+  // }
+  //std::cout << "line 504" << std::endl;
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
 
@@ -587,14 +592,36 @@ void tools::gnutools::Linker::ConstructLinkerJob(Compilation &C,
       bool WantPthread = Args.hasArg(options::OPT_pthread) ||
                          Args.hasArg(options::OPT_pthreads);
 
-      // FIXME: Only pass GompNeedsRT = true for platforms with libgomp that
-      // require librt. Most modern Linux platforms do, but some may not.
-      if (addOpenMPRuntime(CmdArgs, ToolChain, Args,
-                           JA.isHostOffloading(Action::OFK_OpenMP),
-                           /* GompNeedsRT= */ true))
+      if (Args.hasFlag(options::OPT_fopenmp, options::OPT_fopenmp_EQ,
+                       options::OPT_fno_openmp, false)) {
         // OpenMP runtimes implies pthreads when using the GNU toolchain.
         // FIXME: Does this really make sense for all GNU toolchains?
         WantPthread = true;
+
+        // Also link the particular OpenMP runtimes.
+        switch (ToolChain.getDriver().getOpenMPRuntime(Args)) {
+        case Driver::OMPRT_OMP:
+          CmdArgs.push_back("-lomp");
+          break;
+        case Driver::OMPRT_GOMP:
+          CmdArgs.push_back("-lgomp");
+
+          // FIXME: Exclude this for platforms with libgomp that don't require
+          // librt. Most modern Linux platforms require it, but some may not.
+          CmdArgs.push_back("-lrt");
+          break;
+        case Driver::OMPRT_IOMP5:
+          CmdArgs.push_back("-liomp5");
+          break;
+        case Driver::OMPRT_Unknown:
+          // Already diagnosed.
+          break;
+        }
+        if (JA.isHostOffloading(Action::OFK_OpenMP))
+          CmdArgs.push_back("-lomptarget");
+
+        addArchSpecificRPath(ToolChain, Args, CmdArgs);
+      }
 
       AddRunTimeLibs(ToolChain, D, CmdArgs, Args);
 
@@ -655,6 +682,7 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C,
                                     const ArgList &Args,
                                     const char *LinkingOutput) const {
   if (Driver::IsCXXAMP(C.getArgs())) {
+    //std::cout << "IsCXXAMP" << std::endl;
     HCC::CXXAMPLink{getToolChain()}.ConstructJob(C,
                                                  JA,
                                                  Output,
@@ -662,6 +690,7 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C,
                                                  Args,
                                                  LinkingOutput);
   } else {
+    //std::cout << "not IsCXXAMP" << std::endl;
     ArgStringList CmdArgs;
 
     ConstructLinkerJob(C, JA, Output, Inputs, Args, LinkingOutput, CmdArgs);
@@ -773,12 +802,6 @@ void tools::gnutools::Assembler::ConstructJob(Compilation &C,
     else
       Args.AddLastArg(CmdArgs, options::OPT_mcpu_EQ);
     Args.AddLastArg(CmdArgs, options::OPT_mfpu_EQ);
-    break;
-  }
-  case llvm::Triple::aarch64:
-  case llvm::Triple::aarch64_be: {
-    Args.AddLastArg(CmdArgs, options::OPT_march_EQ);
-    Args.AddLastArg(CmdArgs, options::OPT_mcpu_EQ);
     break;
   }
   case llvm::Triple::mips:
@@ -920,8 +943,6 @@ static bool isSoftFloatABI(const ArgList &Args) {
           A->getValue() == StringRef("soft"));
 }
 
-/// \p Flag must be a flag accepted by the driver with its leading '-' removed,
-//     otherwise '-print-multi-lib' will not emit them correctly.
 static void addMultilibFlag(bool Enabled, const char *const Flag,
                             std::vector<std::string> &Flags) {
   if (Enabled)
@@ -1466,17 +1487,17 @@ static void findAndroidArmMultilibs(const Driver &D,
   // Find multilibs with subdirectories like armv7-a, thumb, armv7-a/thumb.
   FilterNonExistent NonExistent(Path, "/crtbegin.o", D.getVFS());
   Multilib ArmV7Multilib = makeMultilib("/armv7-a")
-                               .flag("+march=armv7-a")
-                               .flag("-mthumb");
+                               .flag("+armv7")
+                               .flag("-thumb");
   Multilib ThumbMultilib = makeMultilib("/thumb")
-                               .flag("-march=armv7-a")
-                               .flag("+mthumb");
+                               .flag("-armv7")
+                               .flag("+thumb");
   Multilib ArmV7ThumbMultilib = makeMultilib("/armv7-a/thumb")
-                               .flag("+march=armv7-a")
-                               .flag("+mthumb");
+                               .flag("+armv7")
+                               .flag("+thumb");
   Multilib DefaultMultilib = makeMultilib("")
-                               .flag("-march=armv7-a")
-                               .flag("-mthumb");
+                               .flag("-armv7")
+                               .flag("-thumb");
   MultilibSet AndroidArmMultilibs =
       MultilibSet()
           .Either(ThumbMultilib, ArmV7Multilib,
@@ -1494,8 +1515,8 @@ static void findAndroidArmMultilibs(const Driver &D,
   bool IsArmV7Mode = (IsArmArch || IsThumbArch) &&
       (llvm::ARM::parseArchVersion(Arch) == 7 ||
        (IsArmArch && Arch == "" && IsV7SubArch));
-  addMultilibFlag(IsArmV7Mode, "march=armv7-a", Flags);
-  addMultilibFlag(IsThumbMode, "mthumb", Flags);
+  addMultilibFlag(IsArmV7Mode, "armv7", Flags);
+  addMultilibFlag(IsThumbMode, "thumb", Flags);
 
   if (AndroidArmMultilibs.select(Flags, Result.SelectedMultilib))
     Result.Multilibs = AndroidArmMultilibs;
@@ -1776,9 +1797,7 @@ bool Generic_GCC::GCCInstallationDetector::getBiarchSibling(Multilib &M) const {
   static const char *const ARMTriples[] = {"arm-linux-gnueabi",
                                            "arm-linux-androideabi"};
   static const char *const ARMHFTriples[] = {"arm-linux-gnueabihf",
-                                             "armv7hl-redhat-linux-gnueabi",
-                                             "armv6hl-suse-linux-gnueabi",
-                                             "armv7hl-suse-linux-gnueabi"};
+                                             "armv7hl-redhat-linux-gnueabi"};
   static const char *const ARMebLibDirs[] = {"/lib"};
   static const char *const ARMebTriples[] = {"armeb-linux-gnueabi",
                                              "armeb-linux-androideabi"};
@@ -2188,7 +2207,6 @@ bool Generic_GCC::GCCInstallationDetector::ScanGentooGccConfig(
     SmallVector<StringRef, 2> Lines;
     File.get()->getBuffer().split(Lines, "\n");
     for (StringRef Line : Lines) {
-      Line = Line.trim();
       // CURRENT=triple-version
       if (Line.consume_front("CURRENT=")) {
         const std::pair<StringRef, StringRef> ActiveVersion =
